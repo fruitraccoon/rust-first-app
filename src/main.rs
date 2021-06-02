@@ -6,6 +6,11 @@ mod data {
         Left,
     }
 
+    pub enum GameCommand {
+        Quit,
+        MovePlayer(MovementDirection),
+    }
+
     struct GameLocation {
         xy: (u16, u16),
     }
@@ -59,50 +64,68 @@ mod data {
 
 use crossterm::{
     cursor::{Hide, MoveTo},
-    event::{poll, read, Event, KeyCode},
+    event::{read, Event, KeyCode},
     style::Print,
     terminal::{Clear, ClearType},
     ExecutableCommand, Result,
 };
-use data::{GameData, MovementDirection};
+use data::{GameCommand, GameData, MovementDirection};
 use std::io::{stdout, Stdout};
-use std::time::Duration;
+use std::sync::mpsc;
+use std::thread;
 
-fn main() -> Result<()> {
+fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut out = stdout();
     let mut gd = GameData::new((40, 10));
+    let (tx, rx) = mpsc::channel();
 
     hide_cursor(&mut out)?;
     clear_screen(&mut out)?;
     show_location(&mut out, &gd)?;
 
-    game_loop(&mut out, &mut gd)?;
+    thread::spawn(move || listen_for_player_input(tx).unwrap());
+
+    apply_player_commands(rx, &mut out, &mut gd)?;
 
     Ok(())
 }
 
-fn game_loop(out: &mut Stdout, gd: &mut GameData) -> Result<()> {
+fn listen_for_player_input(
+    tx: mpsc::Sender<GameCommand>,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
     loop {
-        if poll(Duration::from_millis(1000))? {
-            match read()? {
-                Event::Key(event) => match event.code {
-                    KeyCode::Esc => break,
-                    KeyCode::Up => gd.move_player(MovementDirection::Up),
-                    KeyCode::Right => gd.move_player(MovementDirection::Right),
-                    KeyCode::Down => gd.move_player(MovementDirection::Down),
-                    KeyCode::Left => gd.move_player(MovementDirection::Left),
-                    _ => {}
-                },
-                Event::Mouse(_) => {}
-                Event::Resize(_, _) => {}
-            }
+        let command = match read()? {
+            Event::Key(event) => match event.code {
+                KeyCode::Esc => GameCommand::Quit,
+                KeyCode::Up => GameCommand::MovePlayer(MovementDirection::Up),
+                KeyCode::Right => GameCommand::MovePlayer(MovementDirection::Right),
+                KeyCode::Down => GameCommand::MovePlayer(MovementDirection::Down),
+                KeyCode::Left => GameCommand::MovePlayer(MovementDirection::Left),
+                _ => continue,
+            },
+            Event::Mouse(_) => continue,
+            Event::Resize(_, _) => continue,
+        };
 
-            clear_screen(out)?;
-            show_location(out, gd)?;
-        } else {
-            // Timeout expired, no `Event` is available
-        }
+        tx.send(command)?;
     }
+}
+
+fn apply_player_commands(
+    rx: mpsc::Receiver<GameCommand>,
+    out: &mut Stdout,
+    gd: &mut GameData,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    loop {
+        let received = rx.recv()?;
+        match received {
+            GameCommand::MovePlayer(dir) => gd.move_player(dir),
+            GameCommand::Quit => break,
+        }
+        clear_screen(out)?;
+        show_location(out, gd)?;
+    }
+
     Ok(())
 }
 
