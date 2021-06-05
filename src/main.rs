@@ -62,58 +62,85 @@ mod data {
     }
 }
 
-use crossterm::{
-    cursor::{Hide, MoveTo},
-    event::{read, Event, KeyCode},
-    style::Print,
-    terminal::{Clear, ClearType},
-    ExecutableCommand, Result,
-};
-use data::{GameCommand, GameData, MovementDirection};
-use std::io::{stdout, Stdout};
+mod ui_input {
+    use crate::data::{GameCommand, MovementDirection};
+    use crossterm::event::{read, Event, KeyCode};
+    use std::sync::mpsc;
+
+    pub fn listen_for_player_input(
+        tx: mpsc::Sender<GameCommand>,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        loop {
+            let command = match read()? {
+                Event::Key(event) => match event.code {
+                    KeyCode::Esc => GameCommand::Quit,
+                    KeyCode::Up => GameCommand::MovePlayer(MovementDirection::Up),
+                    KeyCode::Right => GameCommand::MovePlayer(MovementDirection::Right),
+                    KeyCode::Down => GameCommand::MovePlayer(MovementDirection::Down),
+                    KeyCode::Left => GameCommand::MovePlayer(MovementDirection::Left),
+                    _ => continue,
+                },
+                Event::Mouse(_) => continue,
+                Event::Resize(_, _) => continue,
+            };
+
+            tx.send(command)?;
+        }
+    }
+}
+
+mod ui_output {
+    use crate::data::GameData;
+    use crossterm::{
+        cursor::{Hide, MoveTo},
+        style::Print,
+        terminal::{Clear, ClearType},
+        ExecutableCommand, Result,
+    };
+    use std::io::stdout;
+
+    pub fn hide_cursor() -> Result<()> {
+        stdout().execute(Hide)?;
+        Ok(())
+    }
+
+    pub fn clear_screen() -> Result<()> {
+        stdout()
+            .execute(MoveTo(0, 0))?
+            .execute(Clear(ClearType::All))?;
+        Ok(())
+    }
+
+    pub fn show_location(d: &GameData) -> Result<()> {
+        let (player_x, player_y) = d.get_player_loc();
+        stdout()
+            .execute(MoveTo(player_x, player_y))?
+            .execute(Print("🛸"))?;
+        Ok(())
+    }
+}
+
+use data::{GameCommand, GameData};
 use std::sync::mpsc;
 use std::thread;
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let mut out = stdout();
     let mut gd = GameData::new((40, 10));
     let (tx, rx) = mpsc::channel();
 
-    hide_cursor(&mut out)?;
-    clear_screen(&mut out)?;
-    show_location(&mut out, &gd)?;
+    ui_output::hide_cursor()?;
+    ui_output::clear_screen()?;
+    ui_output::show_location(&gd)?;
 
-    thread::spawn(move || listen_for_player_input(tx).unwrap());
+    thread::spawn(move || ui_input::listen_for_player_input(tx).unwrap());
 
-    apply_player_commands(rx, &mut out, &mut gd)?;
+    apply_player_commands(rx, &mut gd)?;
 
     Ok(())
 }
 
-fn listen_for_player_input(
-    tx: mpsc::Sender<GameCommand>,
-) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    loop {
-        let command = match read()? {
-            Event::Key(event) => match event.code {
-                KeyCode::Esc => GameCommand::Quit,
-                KeyCode::Up => GameCommand::MovePlayer(MovementDirection::Up),
-                KeyCode::Right => GameCommand::MovePlayer(MovementDirection::Right),
-                KeyCode::Down => GameCommand::MovePlayer(MovementDirection::Down),
-                KeyCode::Left => GameCommand::MovePlayer(MovementDirection::Left),
-                _ => continue,
-            },
-            Event::Mouse(_) => continue,
-            Event::Resize(_, _) => continue,
-        };
-
-        tx.send(command)?;
-    }
-}
-
 fn apply_player_commands(
     rx: mpsc::Receiver<GameCommand>,
-    out: &mut Stdout,
     gd: &mut GameData,
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
     loop {
@@ -122,26 +149,9 @@ fn apply_player_commands(
             GameCommand::MovePlayer(dir) => gd.move_player(dir),
             GameCommand::Quit => break,
         }
-        clear_screen(out)?;
-        show_location(out, gd)?;
+        ui_output::clear_screen()?;
+        ui_output::show_location(gd)?;
     }
 
-    Ok(())
-}
-
-fn hide_cursor(out: &mut Stdout) -> Result<()> {
-    out.execute(Hide)?;
-    Ok(())
-}
-
-fn clear_screen(out: &mut Stdout) -> Result<()> {
-    out.execute(MoveTo(0, 0))?.execute(Clear(ClearType::All))?;
-    Ok(())
-}
-
-fn show_location(out: &mut Stdout, d: &GameData) -> Result<()> {
-    let (player_x, player_y) = d.get_player_loc();
-    out.execute(MoveTo(player_x, player_y))?
-        .execute(Print("🛸"))?;
     Ok(())
 }
