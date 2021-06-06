@@ -6,37 +6,8 @@ mod data {
         Left,
     }
 
-    pub enum GameCommand {
-        Quit,
-        MovePlayer(MovementDirection),
-    }
-
-    struct GameLocation {
-        xy: (u16, u16),
-    }
-
-    impl GameLocation {
-        fn apply(&mut self, direction: MovementDirection, (x_max, y_max): (u16, u16)) {
-            fn safe_inc(v: u16, max: u16) -> u16 {
-                match v {
-                    v if v >= max => max,
-                    _ => v + 1,
-                }
-            }
-            fn safe_dec(v: u16) -> u16 {
-                match v {
-                    0 => 0,
-                    _ => v - 1,
-                }
-            }
-            let (x, y) = self.xy;
-            self.xy = match direction {
-                MovementDirection::Up => (x, safe_dec(y)),
-                MovementDirection::Right => (safe_inc(x, x_max), y),
-                MovementDirection::Down => (x, safe_inc(y, y_max)),
-                MovementDirection::Left => (safe_dec(x), y),
-            };
-        }
+    pub struct GameLocation {
+        pub xy: (u16, u16),
     }
 
     pub struct GameData {
@@ -52,18 +23,46 @@ mod data {
             }
         }
 
-        pub fn get_player_loc(&self) -> (u16, u16) {
-            self.player_loc.xy
+        pub fn get_player_loc(&self) -> &GameLocation {
+            &self.player_loc
         }
 
         pub fn move_player(&mut self, direction: MovementDirection) {
-            self.player_loc.apply(direction, self.bounds_xy);
+            self.player_loc = apply_direction(direction, &self.player_loc, self.bounds_xy);
         }
+    }
+
+    fn apply_direction(
+        direction: MovementDirection,
+        gl: &GameLocation,
+        (x_max, y_max): (u16, u16),
+    ) -> GameLocation {
+        fn safe_inc(v: u16, max: u16) -> u16 {
+            match v {
+                v if v >= max => max,
+                _ => v + 1,
+            }
+        }
+        fn safe_dec(v: u16) -> u16 {
+            match v {
+                0 => 0,
+                _ => v - 1,
+            }
+        }
+        let (x, y) = gl.xy;
+        let xy = match direction {
+            MovementDirection::Up => (x, safe_dec(y)),
+            MovementDirection::Right => (safe_inc(x, x_max), y),
+            MovementDirection::Down => (x, safe_inc(y, y_max)),
+            MovementDirection::Left => (safe_dec(x), y),
+        };
+        GameLocation { xy }
     }
 }
 
 mod ui_input {
-    use crate::data::{GameCommand, MovementDirection};
+    use crate::data::MovementDirection;
+    use crate::GameCommand;
     use crossterm::event::{read, Event, KeyCode};
     use std::sync::mpsc;
 
@@ -90,7 +89,7 @@ mod ui_input {
 }
 
 mod ui_output {
-    use crate::data::GameData;
+    use crate::data::GameLocation;
     use crossterm::{
         cursor::{Hide, MoveTo},
         style::Print,
@@ -99,58 +98,70 @@ mod ui_output {
     };
     use std::io::stdout;
 
-    pub fn hide_cursor() -> Result<()> {
-        stdout().execute(Hide)?;
-        Ok(())
-    }
-
-    pub fn clear_screen() -> Result<()> {
+    pub fn init() -> Result<()> {
         stdout()
+            .execute(Hide)?
             .execute(MoveTo(0, 0))?
             .execute(Clear(ClearType::All))?;
         Ok(())
     }
 
-    pub fn show_location(d: &GameData) -> Result<()> {
-        let (player_x, player_y) = d.get_player_loc();
-        stdout()
-            .execute(MoveTo(player_x, player_y))?
-            .execute(Print("🛸"))?;
+    pub fn show_player(from: &GameLocation, to: &GameLocation) -> Result<()> {
+        clear_location(from)?;
+        show_location(to)?;
+        Ok(())
+    }
+
+    fn clear_location(d: &GameLocation) -> Result<()> {
+        let (x, y) = d.xy;
+        stdout().execute(MoveTo(x, y))?.execute(Print(" "))?;
+        Ok(())
+    }
+
+    fn show_location(d: &GameLocation) -> Result<()> {
+        let (x, y) = d.xy;
+        stdout().execute(MoveTo(x, y))?.execute(Print("&"))?;
         Ok(())
     }
 }
 
-use data::{GameCommand, GameData};
+use crate::data::GameLocation;
+use data::{GameData, MovementDirection};
 use std::sync::mpsc;
 use std::thread;
+
+pub enum GameCommand {
+    Quit,
+    MovePlayer(MovementDirection),
+}
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut gd = GameData::new((40, 10));
     let (tx, rx) = mpsc::channel();
 
-    ui_output::hide_cursor()?;
-    ui_output::clear_screen()?;
-    ui_output::show_location(&gd)?;
-
     thread::spawn(move || ui_input::listen_for_player_input(tx).unwrap());
 
-    apply_player_commands(rx, &mut gd)?;
+    ui_output::init()?;
+    ui_output::show_player(&GameLocation { xy: (0, 0) }, gd.get_player_loc())?;
+
+    apply_game_commands(rx, &mut gd)?;
 
     Ok(())
 }
 
-fn apply_player_commands(
+fn apply_game_commands(
     rx: mpsc::Receiver<GameCommand>,
     gd: &mut GameData,
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    loop {
-        let received = rx.recv()?;
-        match received {
-            GameCommand::MovePlayer(dir) => gd.move_player(dir),
+    for cmd in rx.iter() {
+        match cmd {
+            GameCommand::MovePlayer(dir) => {
+                let from = gd.get_player_loc().xy;
+                gd.move_player(dir);
+                ui_output::show_player(&GameLocation { xy: from }, gd.get_player_loc())?;
+            }
             GameCommand::Quit => break,
         }
-        ui_output::clear_screen()?;
-        ui_output::show_location(gd)?;
     }
 
     Ok(())
