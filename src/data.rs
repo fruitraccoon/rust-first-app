@@ -5,29 +5,64 @@ pub enum MovementDirection {
     Left,
 }
 
+#[derive(Copy, Clone)]
 pub struct GameLocation {
-    pub xy: (u16, u16),
+    xy: (u16, u16),
+}
+
+impl GameLocation {
+    pub fn new(x: u16, y: u16) -> GameLocation {
+        GameLocation { xy: (x, y) }
+    }
+    pub fn get_xy(&self) -> (u16, u16) {
+        self.xy
+    }
+}
+
+pub enum UiOutputInstruction<'a> {
+    MovePlayer {
+        from: GameLocation,
+        to: &'a GameLocation,
+    },
+    MoveNpc {
+        from: GameLocation,
+        to: &'a GameLocation,
+    },
 }
 
 pub struct GameData {
     bounds_xy: (u16, u16),
     player_loc: GameLocation,
+    npc_loc: GameLocation,
 }
 
 impl GameData {
-    pub fn new(bounds_xy: (u16, u16)) -> GameData {
+    pub fn new(bounds_xy: (u16, u16), player_loc: GameLocation) -> GameData {
         GameData {
             bounds_xy,
-            player_loc: GameLocation { xy: (0, 0) },
+            player_loc,
+            npc_loc: GameLocation {
+                xy: (bounds_xy.0, 2),
+            },
         }
     }
 
-    pub fn get_player_loc(&self) -> &GameLocation {
-        &self.player_loc
+    pub fn move_player(&mut self, direction: MovementDirection) -> UiOutputInstruction {
+        let xy = self.player_loc.xy;
+        self.player_loc = apply_direction(direction, &self.player_loc, self.bounds_xy);
+        UiOutputInstruction::MovePlayer {
+            from: GameLocation { xy },
+            to: &self.player_loc,
+        }
     }
 
-    pub fn move_player(&mut self, direction: MovementDirection) {
-        self.player_loc = apply_direction(direction, &self.player_loc, self.bounds_xy);
+    pub fn move_npcs(&mut self) -> UiOutputInstruction {
+        let xy = self.npc_loc.xy;
+        self.npc_loc = apply_direction(MovementDirection::Left, &self.npc_loc, self.bounds_xy);
+        UiOutputInstruction::MoveNpc {
+            from: GameLocation { xy },
+            to: &self.npc_loc,
+        }
     }
 }
 
