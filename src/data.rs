@@ -97,7 +97,7 @@ fn apply_direction(
 ) -> Option<GameLocation> {
     fn safe_inc(v: u16, max: u16) -> Option<u16> {
         match v {
-            v if v >= max => None,
+            v if v >= max - 1 => None,
             _ => Some(v + 1),
         }
     }
