@@ -5,7 +5,7 @@ pub enum MovementDirection {
     Left,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct GameLocation {
     xy: (u16, u16),
 }
@@ -83,6 +83,10 @@ impl GameData {
             .unzip();
         self.npc_locs = new_locs.iter().filter_map(|x| *x).collect();
         instructions
+    }
+
+    pub fn player_collided(&self) -> bool {
+        self.npc_locs.iter().any(|x| *x == self.player_loc)
     }
 }
 

@@ -54,6 +54,10 @@ fn apply_game_commands(
             }
             GameCommand::Quit => break,
         }
+
+        if gd.player_collided() {
+            break;
+        }
     }
 
     Ok(())
