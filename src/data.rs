@@ -44,15 +44,14 @@ impl GameData {
         GameData {
             bounds_xy,
             player_loc,
-            npc_locs: vec![
-                GameLocation {
-                    xy: (bounds_xy.0, 2),
-                },
-                GameLocation {
-                    xy: (bounds_xy.0, 6),
-                },
-            ],
+            npc_locs: Vec::new(),
         }
+    }
+
+    pub fn spawn_npc(&mut self, get_row: &dyn Fn(u16) -> u16) {
+        self.npc_locs.push(GameLocation {
+            xy: (self.bounds_xy.0, get_row(self.bounds_xy.1)),
+        });
     }
 
     pub fn move_player(&mut self, direction: MovementDirection) -> UiOutputInstruction {

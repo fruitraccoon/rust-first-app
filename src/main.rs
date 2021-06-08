@@ -3,6 +3,7 @@ mod ui_input;
 mod ui_output;
 
 use data::{GameData, GameLocation, MovementDirection};
+use rand::Rng;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -52,6 +53,10 @@ fn apply_game_commands(
             GameCommand::GameTick => {
                 let instructions = gd.move_npcs();
                 ui_output::process_instructions(&instructions)?;
+
+                if rand::thread_rng().gen_range(1..=2) == 1 {
+                    gd.spawn_npc(&|x| rand::thread_rng().gen_range(0..x));
+                }
             }
             GameCommand::Quit => break,
         }
