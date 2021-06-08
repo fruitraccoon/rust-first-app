@@ -15,14 +15,15 @@ pub enum GameCommand {
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let player_initial_location = GameLocation::new(0, 0);
-    let mut gd = GameData::new((40, 10), player_initial_location);
+    let bounds = (40, 10);
+    let mut gd = GameData::new(bounds, player_initial_location);
     let (tx, rx) = mpsc::channel();
     let tx2 = tx.clone();
 
     thread::spawn(move || ui_input::listen_for_player_input(tx).unwrap());
     thread::spawn(move || listen_for_game_ticks(tx2).unwrap());
 
-    ui_output::init(&player_initial_location)?;
+    ui_output::init(bounds, &player_initial_location)?;
 
     apply_game_commands(rx, &mut gd)?;
 
