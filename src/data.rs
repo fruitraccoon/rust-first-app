@@ -26,14 +26,14 @@ pub enum UiOutputInstruction<'a> {
     },
     MoveNpc {
         from: GameLocation,
-        to: &'a GameLocation,
+        to: GameLocation,
     },
 }
 
 pub struct GameData {
     bounds_xy: (u16, u16),
     player_loc: GameLocation,
-    npc_loc: GameLocation,
+    npc_locs: Vec<GameLocation>,
 }
 
 impl GameData {
@@ -41,28 +41,39 @@ impl GameData {
         GameData {
             bounds_xy,
             player_loc,
-            npc_loc: GameLocation {
-                xy: (bounds_xy.0, 2),
-            },
+            npc_locs: vec![
+                GameLocation {
+                    xy: (bounds_xy.0, 2),
+                },
+                GameLocation {
+                    xy: (bounds_xy.0, 6),
+                },
+            ],
         }
     }
 
     pub fn move_player(&mut self, direction: MovementDirection) -> UiOutputInstruction {
-        let xy = self.player_loc.xy;
+        let from = self.player_loc.clone();
         self.player_loc = apply_direction(direction, &self.player_loc, self.bounds_xy);
         UiOutputInstruction::MovePlayer {
-            from: GameLocation { xy },
+            from,
             to: &self.player_loc,
         }
     }
 
-    pub fn move_npcs(&mut self) -> UiOutputInstruction {
-        let xy = self.npc_loc.xy;
-        self.npc_loc = apply_direction(MovementDirection::Left, &self.npc_loc, self.bounds_xy);
-        UiOutputInstruction::MoveNpc {
-            from: GameLocation { xy },
-            to: &self.npc_loc,
-        }
+    pub fn move_npcs(&mut self) -> Vec<UiOutputInstruction> {
+        let (new_locs, instructions) = self
+            .npc_locs
+            .iter()
+            .map(|n| {
+                let from = n.clone();
+                let to = apply_direction(MovementDirection::Left, n, self.bounds_xy);
+                let inst = UiOutputInstruction::MoveNpc { from, to };
+                (to, inst)
+            })
+            .unzip();
+        self.npc_locs = new_locs;
+        instructions
     }
 }
 

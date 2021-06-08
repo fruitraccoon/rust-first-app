@@ -18,8 +18,15 @@ pub fn init(player_location: &GameLocation) -> Result<()> {
     Ok(())
 }
 
-pub fn process_instruction(i: UiOutputInstruction) -> Result<()> {
-    match i {
+pub fn process_instructions(instructions: &[UiOutputInstruction]) -> Result<()> {
+    for ins in instructions {
+        process_instruction(ins)?;
+    }
+    Ok(())
+}
+
+pub fn process_instruction(instruction: &UiOutputInstruction) -> Result<()> {
+    match instruction {
         UiOutputInstruction::MovePlayer { from, to } => show_player(&from, to),
         UiOutputInstruction::MoveNpc { from, to } => show_player(&from, to),
     }
@@ -27,8 +34,7 @@ pub fn process_instruction(i: UiOutputInstruction) -> Result<()> {
 
 fn show_player(from: &GameLocation, to: &GameLocation) -> Result<()> {
     clear_location(from)?;
-    show_location(to)?;
-    Ok(())
+    show_location(to)
 }
 
 fn clear_location(d: &GameLocation) -> Result<()> {

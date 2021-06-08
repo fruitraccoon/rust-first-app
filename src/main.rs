@@ -46,11 +46,11 @@ fn apply_game_commands(
         match cmd {
             GameCommand::MovePlayer(dir) => {
                 let ins = gd.move_player(dir);
-                ui_output::process_instruction(ins)?;
+                ui_output::process_instruction(&ins)?;
             }
             GameCommand::GameTick => {
-                let ins = gd.move_npcs();
-                ui_output::process_instruction(ins)?;
+                let instructions = gd.move_npcs();
+                ui_output::process_instructions(&instructions)?;
             }
             GameCommand::Quit => break,
         }
