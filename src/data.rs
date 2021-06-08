@@ -28,6 +28,9 @@ pub enum UiOutputInstruction<'a> {
         from: GameLocation,
         to: GameLocation,
     },
+    RemoveNpc {
+        from: GameLocation,
+    },
 }
 
 pub struct GameData {
@@ -54,7 +57,10 @@ impl GameData {
 
     pub fn move_player(&mut self, direction: MovementDirection) -> UiOutputInstruction {
         let from = self.player_loc.clone();
-        self.player_loc = apply_direction(direction, &self.player_loc, self.bounds_xy);
+        // If the player tries to move off the board, just ignore it
+        if let Some(gl) = apply_direction(direction, &self.player_loc, self.bounds_xy) {
+            self.player_loc = gl;
+        }
         UiOutputInstruction::MovePlayer {
             from,
             to: &self.player_loc,
@@ -62,17 +68,20 @@ impl GameData {
     }
 
     pub fn move_npcs(&mut self) -> Vec<UiOutputInstruction> {
-        let (new_locs, instructions) = self
+        let (new_locs, instructions): (Vec<Option<GameLocation>>, Vec<UiOutputInstruction>) = self
             .npc_locs
             .iter()
             .map(|n| {
                 let from = n.clone();
                 let to = apply_direction(MovementDirection::Left, n, self.bounds_xy);
-                let inst = UiOutputInstruction::MoveNpc { from, to };
+                let inst = match to {
+                    Some(to) => UiOutputInstruction::MoveNpc { from, to },
+                    None => UiOutputInstruction::RemoveNpc { from },
+                };
                 (to, inst)
             })
             .unzip();
-        self.npc_locs = new_locs;
+        self.npc_locs = new_locs.iter().filter_map(|x| *x).collect();
         instructions
     }
 }
@@ -81,25 +90,28 @@ fn apply_direction(
     direction: MovementDirection,
     gl: &GameLocation,
     (x_max, y_max): (u16, u16),
-) -> GameLocation {
-    fn safe_inc(v: u16, max: u16) -> u16 {
+) -> Option<GameLocation> {
+    fn safe_inc(v: u16, max: u16) -> Option<u16> {
         match v {
-            v if v >= max => max,
-            _ => v + 1,
+            v if v >= max => None,
+            _ => Some(v + 1),
         }
     }
-    fn safe_dec(v: u16) -> u16 {
+    fn safe_dec(v: u16) -> Option<u16> {
         match v {
-            0 => 0,
-            _ => v - 1,
+            0 => None,
+            _ => Some(v - 1),
         }
     }
     let (x, y) = gl.xy;
     let xy = match direction {
-        MovementDirection::Up => (x, safe_dec(y)),
-        MovementDirection::Right => (safe_inc(x, x_max), y),
-        MovementDirection::Down => (x, safe_inc(y, y_max)),
-        MovementDirection::Left => (safe_dec(x), y),
+        MovementDirection::Up => (Some(x), safe_dec(y)),
+        MovementDirection::Right => (safe_inc(x, x_max), Some(y)),
+        MovementDirection::Down => (Some(x), safe_inc(y, y_max)),
+        MovementDirection::Left => (safe_dec(x), Some(y)),
     };
-    GameLocation { xy }
+    match xy {
+        (Some(x), Some(y)) => Some(GameLocation { xy: (x, y) }),
+        _ => None,
+    }
 }

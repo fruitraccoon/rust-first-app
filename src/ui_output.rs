@@ -28,7 +28,8 @@ pub fn process_instructions(instructions: &[UiOutputInstruction]) -> Result<()> 
 pub fn process_instruction(instruction: &UiOutputInstruction) -> Result<()> {
     match instruction {
         UiOutputInstruction::MovePlayer { from, to } => show_player(&from, to),
-        UiOutputInstruction::MoveNpc { from, to } => show_player(&from, to),
+        UiOutputInstruction::MoveNpc { from, to } => show_player(&from, &to),
+        UiOutputInstruction::RemoveNpc { from } => clear_location(from),
     }
 }
 
